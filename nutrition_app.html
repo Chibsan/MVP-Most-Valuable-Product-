@@ -1,0 +1,221 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Nutrition comparison</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --paper: #f3f4ed;
+      --surface: #fffefa;
+      --ink: #1d3028;
+      --muted: #64746d;
+      --green: #176b50;
+      --green-dark: #10513e;
+      --line: #d7ded7;
+      --accent: #d5e789;
+      --coral: #c65a43;
+      font-family: "Segoe UI", "Aptos", sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--paper); color: var(--ink); }
+    button, select { font: inherit; }
+    .page { width: min(1440px, 100%); margin: 0 auto; padding: 28px clamp(18px, 4vw, 56px) 48px; }
+    .topbar { display: flex; justify-content: space-between; align-items: flex-start; gap: 20px; }
+    .brand { color: var(--green); font-size: 12px; font-weight: 750; letter-spacing: 1.4px; }
+    h1 { margin: 10px 0 0; font: 40px/1.1 Georgia, serif; letter-spacing: 0; }
+    .intro { margin: 10px 0 0; color: var(--muted); font-size: 14px; }
+    .menu-button { display: grid; place-items: center; width: 48px; height: 48px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--ink); cursor: pointer; }
+    .menu-button:hover { border-color: var(--green); color: var(--green); }
+    .hamburger { display: grid; gap: 5px; }
+    .hamburger span { display: block; width: 19px; height: 2px; border-radius: 2px; background: currentColor; }
+    .results { margin-top: 32px; }
+    .result-head { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; margin-bottom: 12px; }
+    h2 { margin: 0; font: 24px/1.2 Georgia, serif; letter-spacing: 0; }
+    #message { color: var(--muted); font-size: 13px; }
+    .table-wrap { overflow: auto; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
+    table { width: 100%; min-width: 1000px; border-collapse: collapse; text-align: left; font-size: 14px; }
+    thead { background: #e8eee6; }
+    th { color: #43574d; font-size: 11px; font-weight: 750; letter-spacing: .5px; white-space: nowrap; }
+    th, td { padding: 14px 16px; border-bottom: 1px solid var(--line); }
+    tbody tr:last-child td { border-bottom: 0; }
+    tbody tr:hover { background: #f7f8f2; }
+    td:first-child { color: var(--green); font-weight: 750; }
+    td:nth-child(2) { min-width: 260px; font-weight: 650; }
+    dialog { width: min(560px, calc(100vw - 28px)); max-height: min(760px, calc(100vh - 28px)); padding: 0; overflow: auto; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); color: var(--ink); box-shadow: 0 22px 65px #12281c33; }
+    dialog::backdrop { background: #182b2180; }
+    .dialog-head { display: flex; justify-content: space-between; align-items: flex-start; padding: 22px 24px 12px; }
+    .dialog-kicker { color: var(--green); font-size: 11px; font-weight: 750; letter-spacing: 1.2px; }
+    .dialog-head h2 { margin-top: 6px; }
+    .close-button { width: 36px; height: 36px; border: 0; border-radius: 6px; background: transparent; color: var(--muted); font-size: 24px; cursor: pointer; }
+    .close-button:hover { background: var(--paper); color: var(--ink); }
+    .dialog-body { padding: 4px 24px 24px; }
+    .field-label { display: block; margin: 10px 0 8px; font-size: 13px; font-weight: 700; }
+    select { width: 100%; height: 42px; padding: 0 12px; border: 1px solid var(--line); border-radius: 6px; background: white; color: var(--ink); }
+    .choice-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+    .choice { display: flex; align-items: center; gap: 10px; min-height: 42px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 6px; cursor: pointer; font-size: 13px; }
+    .choice:has(input:checked) { border-color: var(--green); background: #edf4ed; }
+    .choice input { accent-color: var(--green); }
+    .choice-number { color: var(--green); font-weight: 750; }
+    .dialog-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }
+    .button { min-height: 40px; padding: 0 16px; border: 1px solid var(--line); border-radius: 6px; background: white; color: var(--ink); cursor: pointer; }
+    .button-primary { border-color: var(--green); background: var(--green); color: white; font-weight: 700; }
+    .button-primary:hover { background: var(--green-dark); }
+    .error { padding: 18px; color: #9c3025; }
+    @media (max-width: 620px) {
+      .page { padding-top: 20px; }
+      h1 { font-size: 32px; }
+      .results { margin-top: 24px; }
+      .choice-list { grid-template-columns: 1fr; }
+      .dialog-body { padding-inline: 18px; }
+      .dialog-head { padding-inline: 18px; }
+      .result-head { align-items: flex-start; flex-direction: column; }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <header class="topbar">
+      <div>
+        <div class="brand">FOOD / LABEL COMPARISON</div>
+        <h1>Nutrition, compared.</h1>
+        <p class="intro">Compare products in the same category by the values that matter to you.</p>
+      </div>
+      <button class="menu-button" id="open-menu" type="button" aria-label="Open ranking choices" aria-haspopup="dialog">
+        <span class="hamburger" aria-hidden="true"><span></span><span></span><span></span></span>
+      </button>
+    </header>
+
+    <section class="results" aria-live="polite">
+      <div class="result-head">
+        <h2 id="ranking-title">Loading products...</h2>
+        <span id="message">Preparing comparison</span>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead id="table-head"></thead>
+          <tbody id="table-body"></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <dialog id="selection-dialog" aria-labelledby="dialog-title">
+    <div class="dialog-head">
+      <div><div class="dialog-kicker">SET YOUR PRIORITY</div><h2 id="dialog-title">Choose a ranking</h2></div>
+      <button class="close-button" id="close-menu" type="button" aria-label="Close">&times;</button>
+    </div>
+    <form class="dialog-body" id="selection-form">
+      <label class="field-label" for="category">Product category</label>
+      <select id="category" name="category"></select>
+      <span class="field-label">Rank by</span>
+      <div class="choice-list" id="ranking-choices"></div>
+      <div class="dialog-actions">
+        <button class="button" id="cancel-selection" type="button">Cancel</button>
+        <button class="button button-primary" type="submit">Apply ranking</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script>
+    const dialog = document.getElementById("selection-dialog");
+    const categorySelect = document.getElementById("category");
+    const rankingChoices = document.getElementById("ranking-choices");
+    const title = document.getElementById("ranking-title");
+    const message = document.getElementById("message");
+    const tableHead = document.getElementById("table-head");
+    const tableBody = document.getElementById("table-body");
+    let activeRanking = "most protein";
+
+    document.getElementById("open-menu").addEventListener("click", () => dialog.showModal());
+    document.getElementById("close-menu").addEventListener("click", () => dialog.close());
+    document.getElementById("cancel-selection").addEventListener("click", () => dialog.close());
+
+    function showError(text) {
+      title.textContent = "Could not load comparison";
+      message.textContent = text;
+      tableHead.replaceChildren();
+      tableBody.replaceChildren();
+    }
+
+    async function refreshRanking() {
+      message.textContent = "Updating comparison...";
+      const query = new URLSearchParams({category: categorySelect.value, ranking: activeRanking});
+      try {
+        const response = await fetch(`/api/rank?${query}`);
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || "Request failed");
+        title.textContent = data.title;
+        tableHead.replaceChildren();
+        tableBody.replaceChildren();
+        const headingRow = document.createElement("tr");
+        for (const header of data.headers) {
+          const cell = document.createElement("th");
+          cell.scope = "col";
+          cell.textContent = header;
+          headingRow.append(cell);
+        }
+        tableHead.replaceChildren(headingRow);
+        for (const row of data.rows) {
+          const tableRow = document.createElement("tr");
+          for (const value of row) {
+            const cell = document.createElement("td");
+            cell.textContent = value;
+            tableRow.append(cell);
+          }
+          tableBody.append(tableRow);
+        }
+        message.textContent = `${data.rows.length} products`;
+      } catch (error) {
+        showError(error.message);
+      }
+    }
+
+    document.getElementById("selection-form").addEventListener("submit", async (event) => {
+      event.preventDefault();
+      activeRanking = document.querySelector('input[name="ranking"]:checked').value;
+      dialog.close();
+      await refreshRanking();
+    });
+
+    async function initialize() {
+      try {
+        const response = await fetch("/api/options");
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || "Request failed");
+        categorySelect.replaceChildren(...data.categories.map((category) => {
+          const option = document.createElement("option");
+          option.value = category;
+          option.textContent = category;
+          return option;
+        }));
+        categorySelect.value = data.default_category;
+        activeRanking = data.default_ranking;
+        rankingChoices.replaceChildren(...data.rankings.map((ranking, index) => {
+          const label = document.createElement("label");
+          label.className = "choice";
+          const input = document.createElement("input");
+          input.type = "radio";
+          input.name = "ranking";
+          input.value = ranking;
+          input.checked = ranking === activeRanking;
+          const number = document.createElement("span");
+          number.className = "choice-number";
+          number.textContent = String(index + 1).padStart(2, "0");
+          const text = document.createElement("span");
+          text.textContent = ranking;
+          label.append(input, number, text);
+          return label;
+        }));
+        await refreshRanking();
+      } catch (error) {
+        showError(error.message);
+      }
+    }
+
+    initialize();
+  </script>
+</body>
+</html>

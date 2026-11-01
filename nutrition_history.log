@@ -1,0 +1,22 @@
+[2026-11-01T11:51:45.949753+00:00]
+Prompt: web category=cheese priority=protein direction=most
+Answer:
+cheese: most Protein
+Priority rank | Product                                        | Protein   | Calories      | Carbohydrates | Fat       | Fiber          | Price / 100 g | Product price / size
+--------------+------------------------------------------------+-----------+---------------+---------------+-----------+----------------+---------------+---------------------
+1             | Kuusamon Juusto Erankavija 10% raaste 140 g    | #1 (33 g) | #1 (222 kcal) | #1 (0 g)      | #1 (10 g) | null (NO-Rank) | #4 (1.78)     | €2.49/140g          
+2             | Xtra juustoraaste 15% rasvaa 500 g             | #2 (30 g) | #2 (263 kcal) | #2 (2 g)      | #2 (15 g) | null (NO-Rank) | #2 (0.95)     | €4.75/500g          
+3             | Valio Hyva suomalainen Arki juustoraaste 170 g | #3 (28 g) | #4 (324 kcal) | #1 (0 g)      | #4 (23 g) | #1 (1 g)       | #3 (1.23)     | €2.09/170g          
+4             | Coop mozzarella juustoraaste 150 g             | #4 (26 g) | #3 (301 kcal) | #2 (2 g)      | #3 (21 g) | null (NO-Rank) | #1 (0.86)     | €1.29/150g          
+
+[2026-11-01T11:52:01.182630+00:00]
+Prompt: web category=cheese priority=carbohydrates direction=least
+Answer:
+cheese: least Carbohydrates
+Priority rank | Product                                        | Carbohydrates | Calories      | Protein   | Fat       | Fiber          | Price / 100 g | Product price / size
+--------------+------------------------------------------------+---------------+---------------+-----------+-----------+----------------+---------------+---------------------
+1             | Kuusamon Juusto Erankavija 10% raaste 140 g    | #1 (0 g)      | #1 (222 kcal) | #1 (33 g) | #1 (10 g) | null (NO-Rank) | #4 (1.78)     | €2.49/140g          
+1             | Valio Hyva suomalainen Arki juustoraaste 170 g | #1 (0 g)      | #4 (324 kcal) | #3 (28 g) | #4 (23 g) | #1 (1 g)       | #3 (1.23)     | €2.09/170g          
+2             | Coop mozzarella juustoraaste 150 g             | #2 (2 g)      | #3 (301 kcal) | #4 (26 g) | #3 (21 g) | null (NO-Rank) | #1 (0.86)     | €1.29/150g          
+2             | Xtra juustoraaste 15% rasvaa 500 g             | #2 (2 g)      | #2 (263 kcal) | #2 (30 g) | #2 (15 g) | null (NO-Rank) | #2 (0.95)     | €4.75/500g          
+
