@@ -1,0 +1,473 @@
+openapi: 3.1.0
+info:
+  title: Nutrition Comparer API
+  version: 1.0.0
+  description: Category, product, anonymous preference, and ranked comparison endpoints. S-kaupat supplies category and product identity; exact-barcode Open Food Facts API or official offline-export records may supply nutrition facts only. Prices are null in the current release.
+servers:
+  - url: /api/v1
+paths:
+  /categories:
+    get:
+      operationId: listCategories
+      summary: List active S-kaupat categories, including configured empty categories
+      responses:
+        "200":
+          description: Available categories
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Category"
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /products:
+    get:
+      operationId: listProducts
+      summary: List products, optionally filtered by category
+      parameters:
+        - in: query
+          name: category
+          required: false
+          schema:
+            type: string
+          description: Category slug.
+        - in: query
+          name: limit
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 500
+            default: 100
+        - in: query
+          name: offset
+          required: false
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+      responses:
+        "200":
+          description: Product page with available values
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, limit, offset]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Product"
+                  limit:
+                    type: integer
+                  offset:
+                    type: integer
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /preferences:
+    get:
+      operationId: getPreference
+      summary: Get the anonymous browser session's comparison preference
+      description: Creates an anonymous session and sets its cookie when no valid session exists. Returns whether the canonical default ranking or a custom priority is active.
+      parameters:
+        - $ref: "#/components/parameters/SessionCookie"
+      responses:
+        "200":
+          description: Current preference and ranking criteria
+          headers:
+            Set-Cookie:
+              schema:
+                type: string
+              description: Set when a new anonymous session is created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Preference"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    put:
+      operationId: updatePreference
+      summary: Update the anonymous browser session's category and default/custom preference
+      parameters:
+        - $ref: "#/components/parameters/SessionCookie"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PreferenceUpdate"
+      responses:
+        "200":
+          description: Updated preference and resulting ordered criteria
+          headers:
+            Set-Cookie:
+              schema:
+                type: string
+              description: Set when a new anonymous session is created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Preference"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /comparisons:
+    post:
+      operationId: createComparison
+      summary: Compare and rank products in a category using the requested preference
+      description: This request computes a comparison without persisting preference. The frontend saves preference with PUT /preferences, then submits the same category and preference to this endpoint.
+      parameters:
+        - $ref: "#/components/parameters/SessionCookie"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ComparisonRequest"
+      responses:
+        "200":
+          description: Products with per-metric values and ranks, ordered by criteria
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Comparison"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+        "500":
+          $ref: "#/components/responses/InternalError"
+components:
+  parameters:
+    SessionCookie:
+      in: cookie
+      name: nutrition_session
+      required: false
+      schema:
+        type: string
+      description: Opaque server-issued anonymous browser-session cookie.
+  schemas:
+    Category:
+      type: object
+      required: [slug, name, product_count, is_active]
+      properties:
+        slug:
+          type: string
+        name:
+          type: string
+        product_count:
+          type: integer
+          minimum: 0
+        is_active:
+          type: boolean
+        source_url:
+          type: [string, "null"]
+          format: uri
+    Metric:
+      type: string
+      enum: [calories, carbohydrates, protein, fat, fibre, price]
+    Direction:
+      type: string
+      enum: [most, least]
+    Criterion:
+      type: object
+      required: [metric, direction, unit]
+      properties:
+        metric:
+          $ref: "#/components/schemas/Metric"
+        direction:
+          $ref: "#/components/schemas/Direction"
+        unit:
+          type: string
+          examples: ["kcal/100g", "g/100g", "EUR/100g"]
+    Preference:
+      type: object
+      required: [category, preference_mode, primary_metric, primary_direction, criteria]
+      properties:
+        category:
+          type: [string, "null"]
+        preference_mode:
+          type: string
+          enum: [default, custom]
+          description: Default restores all canonical directions/order; custom prioritizes primary_metric and primary_direction.
+        primary_metric:
+          $ref: "#/components/schemas/Metric"
+        primary_direction:
+          $ref: "#/components/schemas/Direction"
+        criteria:
+          type: array
+          items:
+            $ref: "#/components/schemas/Criterion"
+    PreferenceUpdate:
+      type: object
+      description: For default mode, the server restores canonical defaults. For custom mode, primary_metric and primary_direction are required.
+      required: [category, preference_mode]
+      properties:
+        category:
+          type: string
+        preference_mode:
+          type: string
+          enum: [default, custom]
+        primary_metric:
+          $ref: "#/components/schemas/Metric"
+        primary_direction:
+          $ref: "#/components/schemas/Direction"
+      allOf:
+        - if:
+            properties:
+              preference_mode:
+                const: custom
+          then:
+            required: [primary_metric, primary_direction]
+    ComparisonRequest:
+      type: object
+      description: Default mode uses canonical preferences. Custom mode requires a primary metric and direction.
+      required: [category, preference_mode]
+      properties:
+        category:
+          type: string
+        preference_mode:
+          type: string
+          enum: [default, custom]
+        primary_metric:
+          $ref: "#/components/schemas/Metric"
+        primary_direction:
+          $ref: "#/components/schemas/Direction"
+      allOf:
+        - if:
+            properties:
+              preference_mode:
+                const: custom
+          then:
+            required: [primary_metric, primary_direction]
+    MetricResult:
+      type: object
+      required: [value, unit, direction, rank, quality_status]
+      description: Rank is dense, is shared by equal reliable values, and is null for unreliable or missing values.
+      properties:
+        value:
+          type: [number, "null"]
+        unit:
+          type: string
+        direction:
+          $ref: "#/components/schemas/Direction"
+        rank:
+          type: [integer, "null"]
+          minimum: 1
+          description: Dense metric rank; equal values share a rank.
+        quality_status:
+          type: string
+          enum: [reliable, unreliable, unverified, missing, invalid]
+        reason:
+          type: [string, "null"]
+        source_url:
+          type: [string, "null"]
+          format: uri
+          description: For nutrition facts, the Open Food Facts record URL when the barcode matched exactly.
+        observed_at:
+          type: [string, "null"]
+          format: date-time
+          description: Open Food Facts record update time, not a nutrition-label observation time.
+    MetricValue:
+      type: object
+      required: [value, unit, quality_status]
+      properties:
+        value:
+          type: [number, "null"]
+        unit:
+          type: string
+        quality_status:
+          type: string
+          enum: [reliable, unreliable, unverified, missing, invalid]
+        reason:
+          type: [string, "null"]
+        source_url:
+          type: [string, "null"]
+          format: uri
+          description: For nutrition facts, the Open Food Facts record URL when the barcode matched exactly.
+        observed_at:
+          type: [string, "null"]
+          format: date-time
+          description: Open Food Facts record update time, not a nutrition-label observation time.
+    Product:
+      type: object
+      required: [id, name, category, brand, barcode, package_size_g, package_size_label, package_price, price_per_100g, metrics]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        category:
+          type: string
+        brand:
+          type: [string, "null"]
+        barcode:
+          type: [string, "null"]
+        package_size_g:
+          type: [number, "null"]
+        package_size_label:
+          type: [string, "null"]
+          description: Source-backed package size text. Volume labels are retained without converting to grams.
+        package_price:
+          type: [number, "null"]
+        currency:
+          type: [string, "null"]
+          enum: [EUR, null]
+          description: Prices are supplied and ranked only in EUR.
+        price_per_100g:
+          type: [number, "null"]
+        price_source:
+          type: [string, "null"]
+        price_observed_at:
+          type: [string, "null"]
+          format: date-time
+        source_url:
+          type: [string, "null"]
+          format: uri
+        metrics:
+          type: object
+          required: [calories, carbohydrates, protein, fat, fibre, price]
+          properties:
+            calories:
+              $ref: "#/components/schemas/MetricValue"
+            carbohydrates:
+              $ref: "#/components/schemas/MetricValue"
+            protein:
+              $ref: "#/components/schemas/MetricValue"
+            fat:
+              $ref: "#/components/schemas/MetricValue"
+            fibre:
+              $ref: "#/components/schemas/MetricValue"
+            price:
+              $ref: "#/components/schemas/MetricValue"
+    ProductComparison:
+      type: object
+      required: [id, name, category, brand, barcode, display_position, package_size_g, package_size_label, package_price, price_per_100g, metrics]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        category:
+          type: string
+        brand:
+          type: [string, "null"]
+        barcode:
+          type: [string, "null"]
+        display_position:
+          type: integer
+          minimum: 1
+          description: Overall position after primary sorting and missing-value fallback.
+        package_size_g:
+          type: [number, "null"]
+        package_size_label:
+          type: [string, "null"]
+          description: Source-backed package size text. Volume labels are retained without converting to grams.
+        package_price:
+          type: [number, "null"]
+        currency:
+          type: [string, "null"]
+          enum: [EUR, null]
+        price_per_100g:
+          type: [number, "null"]
+        price_source:
+          type: [string, "null"]
+        price_observed_at:
+          type: [string, "null"]
+          format: date-time
+        source_url:
+          type: [string, "null"]
+          format: uri
+        metrics:
+          type: object
+          required: [calories, carbohydrates, protein, fat, fibre, price]
+          properties:
+            calories:
+              $ref: "#/components/schemas/MetricResult"
+            carbohydrates:
+              $ref: "#/components/schemas/MetricResult"
+            protein:
+              $ref: "#/components/schemas/MetricResult"
+            fat:
+              $ref: "#/components/schemas/MetricResult"
+            fibre:
+              $ref: "#/components/schemas/MetricResult"
+            price:
+              $ref: "#/components/schemas/MetricResult"
+    Comparison:
+      type: object
+      required: [category, preference_mode, primary_metric, primary_direction, criteria, items, unranked_count]
+      description: >
+        Reliable primary values sort first. Tied values share a dense metric rank
+        and display alphabetically. Products missing the primary value appear
+        after ranked products and use subsequent default criteria for fallback
+        ordering; their missing metric rank remains null.
+      properties:
+        category:
+          type: string
+        preference_mode:
+          type: string
+          enum: [default, custom]
+        primary_metric:
+          $ref: "#/components/schemas/Metric"
+        primary_direction:
+          $ref: "#/components/schemas/Direction"
+        criteria:
+          type: array
+          items:
+            $ref: "#/components/schemas/Criterion"
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/ProductComparison"
+        unranked_count:
+          type: integer
+          minimum: 0
+          description: Number of products without a reliable value for the primary criterion. They remain in items after products with reliable primary values and use subsequent default criteria for fallback ordering.
+    Error:
+      type: object
+      required: [code, message]
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        details:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+  responses:
+    NotFound:
+      description: Requested category or resource does not exist
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    ValidationError:
+      description: Invalid request fields or unsupported selection
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    InternalError:
+      description: Unexpected server or database error
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
