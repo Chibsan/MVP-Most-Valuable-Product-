@@ -9,3 +9,4 @@ const hostUri =
 const hostIp = hostUri ? hostUri.split(':')[0] : 'localhost';
 
 export const API_URL = `http://${hostIp}:8000`;
+
