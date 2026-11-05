@@ -4,3 +4,4 @@ import { installExpoGlobalPolyfill } from 'expo-modules-core/build/polyfill/dang
 if (!globalThis.expo?.EventEmitter) {
   installExpoGlobalPolyfill();
 }
+
