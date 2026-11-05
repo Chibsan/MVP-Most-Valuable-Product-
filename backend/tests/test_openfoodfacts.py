@@ -105,20 +105,23 @@ def test_rate_limit_handling():
 
 
 def test_infer_category_rules():
-    # Chicken / Poultry -> meat
+    # 1. Native PNNS and food_groups_tags (Standard Open Food Facts taxonomies)
+    assert infer_category(pnns_groups_1="Fish Meat Eggs", pnns_groups_2="Meat", food_groups_tags=["en:meat"]) == "meat"
+    assert infer_category(pnns_groups_1="Milk and dairy products", pnns_groups_2="Cheese", food_groups_tags=["en:cheese"]) == "cheese"
+    assert infer_category(pnns_groups_1="Milk and dairy products", pnns_groups_2="Milk and yogurt") == "dairy"
+    assert infer_category(pnns_groups_1="Cereals and potatoes", pnns_groups_2="Bread") == "bakery"
+    assert infer_category(pnns_groups_1="Beverages", pnns_groups_2="Sweetened beverages") == "drinks"
+    assert infer_category(pnns_groups_1="Sugary snacks", pnns_groups_2="Sweets") == "snacks"
+
+    # 2. General taxonomy tags fallback
     assert infer_category(categories_tags=["en:meats-and-their-products", "en:chickens"]) == "meat"
-    # Mozzarella with dairy & cheese tags -> cheese (precedence over dairy)
     assert infer_category(categories_tags=["en:dairies", "en:cheeses", "en:mozzarella"]) == "cheese"
-    # Milk -> dairy
     assert infer_category(categories_tags=["en:dairies", "en:milks"]) == "dairy"
-    # Bread -> bakery
     assert infer_category(categories_tags=["en:breads", "en:plant-based-foods"]) == "bakery"
-    # Chips -> snacks
     assert infer_category(categories_tags=["en:snacks", "en:crisps"]) == "snacks"
-    # Juice -> drinks
     assert infer_category(categories_tags=["en:beverages", "en:fruit-juices"]) == "drinks"
 
-    # Name-only inference (e.g. Finnish names)
+    # 3. Product name fallback for unclassified items
     assert infer_category(product_name="Kanan Fileesuikale 2.1%") == "meat"
     assert infer_category(product_name="Oululainen Reissumies Ruisleipä") == "bakery"
     assert infer_category(product_name="Valio Oltermanni Kermajuusto") == "cheese"
