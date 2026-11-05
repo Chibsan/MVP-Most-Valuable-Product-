@@ -82,3 +82,40 @@ def test_post_product_and_ranking_flow(client):
     assert cal_rankings[0]["barcode"] == "7340191149779"
     assert cal_rankings[0]["rank"] == 1
     assert cal_rankings[0]["primary_value"] == 298.0
+
+
+def test_auto_category_detection(client):
+    mock_chicken = OpenFoodFactsProduct(
+        barcode="6414891801020",
+        name="Kanan Fileesuikale 2.1%",
+        brand="Kotimaista",
+        image_url="https://images.example/chicken.jpg",
+        package_size_g=300.0,
+        nutrients=[
+            ParsedNutrient("protein", 23.0, "g", "reliable"),
+            ParsedNutrient("calories", 110.0, "kcal", "reliable"),
+            ParsedNutrient("fat", 2.1, "g", "reliable"),
+        ],
+        detected_category="meat",
+    )
+
+    with patch("services.openfoodfacts.lookup_barcode", return_value=mock_chicken):
+        # 1. Post with category="auto" -> should automatically assign "meat"
+        res = client.post("/products", json={"barcode": "6414891801020", "category": "auto"})
+        assert res.status_code == 200
+        data = res.json()
+        assert data["barcode"] == "6414891801020"
+        assert data["category"] == "meat"
+        assert data["name"] == "Kanan Fileesuikale 2.1%"
+
+    # 2. Ranking filtered by category "meat" should include it
+    meat_rank = client.get("/products/ranking?category=meat&metric=protein")
+    assert meat_rank.status_code == 200
+    meat_items = meat_rank.json()
+    assert any(item["barcode"] == "6414891801020" for item in meat_items)
+
+    # 3. Ranking filtered by category "cheese" should NOT include the chicken
+    cheese_rank = client.get("/products/ranking?category=cheese&metric=protein")
+    assert cheese_rank.status_code == 200
+    cheese_items = cheese_rank.json()
+    assert not any(item["barcode"] == "6414891801020" for item in cheese_items)

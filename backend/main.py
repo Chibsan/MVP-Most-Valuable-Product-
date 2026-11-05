@@ -63,7 +63,7 @@ def get_db():
 # Pydantic Schemas
 class ProductCreate(BaseModel):
     barcode: str
-    category: str = "general"
+    category: str = "auto"
 
 
 class NutritionFactOut(BaseModel):
@@ -73,8 +73,7 @@ class NutritionFactOut(BaseModel):
     quality_status: str
     quality_note: str | None = None
 
-    class Config:
-        from_attributes = True
+    model_config = {"from_attributes": True}
 
 
 class ProductResponse(BaseModel):
@@ -87,8 +86,7 @@ class ProductResponse(BaseModel):
     score: float = 0.0
     nutrition_facts: list[NutritionFactOut] = []
 
-    class Config:
-        from_attributes = True
+    model_config = {"from_attributes": True}
 
 
 class RankedItemOut(BaseModel):
@@ -115,11 +113,22 @@ def health_check():
 @app.post("/products", response_model=ProductResponse)
 def add_product(payload: ProductCreate, db: Session = Depends(get_db)):
     barcode = payload.barcode.strip()
-    category = payload.category.strip().lower() if payload.category else "general"
+    requested_category = payload.category.strip().lower() if payload.category else "auto"
 
     # Return existing product only if it already has rich nutrition facts
     existing = db.query(models.Product).filter(models.Product.barcode == barcode).first()
     if existing and existing.name and existing.nutrition_facts and not existing.name.startswith("Scanned Product"):
+        # Auto-update category if existing product was saved with legacy/default category
+        if requested_category == "auto":
+            inferred = openfoodfacts.infer_category(product_name=existing.name)
+            if inferred != "general" and existing.category != inferred:
+                existing.category = inferred
+                db.commit()
+                db.refresh(existing)
+        elif requested_category not in ("auto", "general") and existing.category != requested_category:
+            existing.category = requested_category
+            db.commit()
+            db.refresh(existing)
         return existing
 
     # Query Open Food Facts for real product identity and nutrients
@@ -127,6 +136,7 @@ def add_product(payload: ProductCreate, db: Session = Depends(get_db)):
     brand = None
     image_url = None
     nutrient_facts = []
+    detected_cat = "general"
 
     try:
         off_product = openfoodfacts.lookup_barcode(barcode)
@@ -134,6 +144,7 @@ def add_product(payload: ProductCreate, db: Session = Depends(get_db)):
         brand = off_product.brand
         image_url = off_product.image_url
         nutrient_facts = off_product.nutrients
+        detected_cat = off_product.detected_category
     except (openfoodfacts.OpenFoodFactsNotFoundError, ValueError):
         name = f"Product {barcode}"
     except openfoodfacts.OpenFoodFactsRateLimitError:
@@ -144,10 +155,13 @@ def add_product(payload: ProductCreate, db: Session = Depends(get_db)):
     except Exception as exc:
         name = f"Product {barcode}"
 
+    # Determine final category: respect explicit manual selection, or use detected
+    final_category = detected_cat if requested_category in ("auto", "", "general") else requested_category
+
     product = existing or models.Product(barcode=barcode, score=0.0)
     product.name = name
     product.brand = brand
-    product.category = category
+    product.category = final_category
     product.image_url = image_url
 
     if not existing:

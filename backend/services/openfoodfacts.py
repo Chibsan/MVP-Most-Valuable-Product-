@@ -7,6 +7,49 @@ API_BASE_URL = "https://world.openfoodfacts.org/api/v2/product"
 DEFAULT_USER_AGENT = "MVP4U - GroceryComparisonPlatform/1.0 (https://github.com/example/mvp4u)"
 BARCODE_PATTERN = re.compile(r"^\d{8,14}$")
 
+CATEGORY_KEYWORDS = {
+    "cheese": [
+        "cheese", "cheeses", "juusto", "juustot", "fromage", "fromages", "käse",
+        "mozzarella", "cheddar", "gouda", "parmesan", "parmigiano", "brie",
+        "camembert", "feta", "edam", "emmental", "halloumi", "ricotta",
+        "leipäjuusto", "sulatejuusto", "sinihomejuusto", "valkohomejuusto",
+        "juustoraaste",
+    ],
+    "meat": [
+        "meat", "meats", "poultry", "poultries", "chicken", "chickens",
+        "kana", "kanan", "broileri", "broilerin", "liha", "lihavalmiste",
+        "nauta", "naudan", "sika", "sian", "possu", "possun", "pork", "beef",
+        "kalkkuna", "turkey", "kala", "kalat", "fish", "fishes", "lohi", "lohen",
+        "salmon", "tuna", "tonnikala", "seafood", "äyriäiset", "makkara",
+        "sausage", "nakki", "kinkku", "ham", "bacon", "pekoni", "jauheliha",
+        "filee", "fileesuikale", "leikkele",
+    ],
+    "dairy": [
+        "dairy", "dairies", "milk", "milks", "yogurt", "yogurts", "yoghurt",
+        "maito", "maidot", "jogurtti", "rahka", "piimä", "viili", "butter",
+        "voi", "cream", "kerma", "kermaviili", "skyr", "cottage cheese",
+    ],
+    "bakery": [
+        "bread", "breads", "bakery", "bakeries", "leipä", "leivät", "pulla",
+        "pullat", "pastry", "pastries", "croissant", "bagel", "toast", "flour",
+        "jauho", "jauhot", "cake", "kakku", "keksi", "keksit", "biscuit",
+        "biscuits", "cookie", "cookies", "muffin", "rieska", "sämpylä",
+        "näkkileipä",
+    ],
+    "snacks": [
+        "snack", "snacks", "chips", "crisps", "sipsi", "sipsit", "perunalastu",
+        "chocolate", "chocolates", "suklaa", "suklaat", "candy", "candies",
+        "karkki", "karkit", "makeinen", "makeiset", "sweets", "popcorn",
+        "pähkinä", "pähkinät", "nut", "nuts",
+    ],
+    "drinks": [
+        "beverage", "beverages", "drink", "drinks", "juice", "juices", "mehu",
+        "mehut", "soda", "soft-drinks", "limsa", "limonadi", "water", "waters",
+        "vesi", "kahvi", "coffee", "tea", "tee", "energy-drinks", "olut",
+        "beer", "siideri", "cider",
+    ],
+}
+
 METRIC_CONFIG = {
     "calories": {"field": "energy-kcal_100g", "unit": "kcal", "max": 900.0},
     "protein": {"field": "proteins_100g", "unit": "g", "max": 100.0},
@@ -41,6 +84,49 @@ class OpenFoodFactsProduct:
     image_url: str | None
     package_size_g: float | None
     nutrients: list[ParsedNutrient]
+    detected_category: str = "general"
+    categories_tags: tuple[str, ...] = ()
+
+
+def infer_category(
+    categories_tags: list[str] | tuple[str, ...] | None = None,
+    categories_text: str | None = None,
+    product_name: str | None = None,
+) -> str:
+    """Infer high-level category using Open Food Facts tags, categories text, and name.
+
+    Evaluates in precedence order: cheese -> meat -> dairy -> bakery -> snacks -> drinks.
+    Returns 'general' if no strong match found.
+    """
+    tag_tokens: list[str] = []
+    if categories_tags:
+        for tag in categories_tags:
+            cleaned = re.sub(r"^[a-z]{2}:", "", tag.lower())
+            cleaned = re.sub(r"[-_]+", " ", cleaned)
+            tag_tokens.append(cleaned)
+    combined_tags = " ".join(tag_tokens)
+    cat_text = (categories_text or "").lower()
+    p_name = (product_name or "").lower()
+
+    for cat, keywords in CATEGORY_KEYWORDS.items():
+        # 1. Match against standardized taxonomy tags
+        for kw in keywords:
+            if re.search(rf"(^|\W){re.escape(kw)}(\W|$)", combined_tags):
+                return cat
+
+        # 2. Match against free-form categories string
+        for kw in keywords:
+            if re.search(rf"(^|\W){re.escape(kw)}(\W|$)", cat_text):
+                return cat
+
+        # 3. Match against product name (support compound Finnish/German words)
+        for kw in keywords:
+            if len(kw) >= 4 and kw in p_name:
+                return cat
+            elif re.search(rf"(^|\W){re.escape(kw)}(\W|$)", p_name):
+                return cat
+
+    return "general"
 
 
 def _parse_numeric(val: Any) -> float | None:
@@ -102,7 +188,7 @@ def lookup_barcode(
 
     headers = {"User-Agent": user_agent}
     params = {
-        "fields": "code,product_name,product_name_en,brands,nutriments,image_front_url,quantity"
+        "fields": "code,product_name,product_name_en,brands,nutriments,image_front_url,quantity,categories,categories_tags"
     }
 
     own_client = False
@@ -139,8 +225,15 @@ def lookup_barcode(
         brand = product_raw.get("brands")
         image_url = product_raw.get("image_front_url")
         nutriments = product_raw.get("nutriments") or {}
+        categories_str = product_raw.get("categories")
+        categories_tags = tuple(product_raw.get("categories_tags") or [])
 
         nutrients = _extract_nutrients(nutriments)
+        detected_category = infer_category(
+            categories_tags=list(categories_tags),
+            categories_text=categories_str,
+            product_name=name,
+        )
 
         return OpenFoodFactsProduct(
             barcode=barcode,
@@ -149,6 +242,8 @@ def lookup_barcode(
             image_url=image_url,
             package_size_g=None,
             nutrients=nutrients,
+            detected_category=detected_category,
+            categories_tags=categories_tags,
         )
     finally:
         if own_client:

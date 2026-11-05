@@ -20,23 +20,35 @@ const METRIC_OPTIONS = [
   { label: "Least Carbs", metric: "carbohydrates", direction: "least" },
 ];
 
+const CATEGORY_OPTIONS = [
+  { label: "All Items", value: "all" },
+  { label: "Meat", value: "meat" },
+  { label: "Cheese", value: "cheese" },
+  { label: "Dairy", value: "dairy" },
+  { label: "Bakery", value: "bakery" },
+  { label: "Snacks", value: "snacks" },
+  { label: "Drinks", value: "drinks" },
+];
+
 export default function RankingScreen({ navigation }) {
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [activeMetric, setActiveMetric] = useState(METRIC_OPTIONS[0]);
+  const [activeCategory, setActiveCategory] = useState("all");
   const isFocused = useIsFocused();
 
   useEffect(() => {
     if (isFocused) {
-      fetchRanking(activeMetric);
+      fetchRanking(activeMetric, activeCategory);
     }
-  }, [isFocused, activeMetric]);
+  }, [isFocused, activeMetric, activeCategory]);
 
-  const fetchRanking = async (metricOption = activeMetric) => {
+  const fetchRanking = async (metricOption = activeMetric, categoryFilter = activeCategory) => {
     setLoading(true);
     try {
-      const url = `${API_URL}/products/ranking?metric=${metricOption.metric}&direction=${metricOption.direction}`;
+      const catParam = categoryFilter !== "all" ? `&category=${categoryFilter}` : "";
+      const url = `${API_URL}/products/ranking?metric=${metricOption.metric}&direction=${metricOption.direction}${catParam}`;
       const response = await fetch(url);
       if (response.ok) {
         const data = await response.json();
@@ -54,6 +66,10 @@ export default function RankingScreen({ navigation }) {
 
   const handleMetricSelect = (opt) => {
     setActiveMetric(opt);
+  };
+
+  const handleCategorySelect = (cat) => {
+    setActiveCategory(cat.value);
   };
 
   const renderItem = ({ item }) => {
@@ -132,6 +148,31 @@ export default function RankingScreen({ navigation }) {
         </ScrollView>
       </View>
 
+      {/* Category Filter Tabs */}
+      <View style={styles.categoryBar}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+          {CATEGORY_OPTIONS.map((cat) => {
+            const isActive = cat.value === activeCategory;
+            return (
+              <TouchableOpacity
+                key={cat.value}
+                style={[styles.categoryChip, isActive && styles.activeCategoryChip]}
+                onPress={() => handleCategorySelect(cat)}
+              >
+                <Text
+                  style={[
+                    styles.categoryChipText,
+                    isActive && styles.activeCategoryChipText,
+                  ]}
+                >
+                  {cat.label}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
+      </View>
+
       {/* Main List */}
       {loading && !refreshing ? (
         <ActivityIndicator size="large" color="#4A90E2" style={styles.loader} />
@@ -143,7 +184,7 @@ export default function RankingScreen({ navigation }) {
           refreshing={refreshing}
           onRefresh={() => {
             setRefreshing(true);
-            fetchRanking();
+            fetchRanking(activeMetric, activeCategory);
           }}
           contentContainerStyle={styles.listContent}
           ListEmptyComponent={
@@ -176,6 +217,35 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     borderBottomWidth: 1,
     borderColor: "#e4e6eb",
+  },
+  categoryBar: {
+    backgroundColor: "#fafbfc",
+    paddingVertical: 8,
+    paddingHorizontal: 8,
+    borderBottomWidth: 1,
+    borderColor: "#e4e6eb",
+  },
+  categoryChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: 14,
+    backgroundColor: "#ffffff",
+    borderWidth: 1,
+    borderColor: "#e1e4e8",
+    marginHorizontal: 3,
+  },
+  activeCategoryChip: {
+    backgroundColor: "#24292e",
+    borderColor: "#24292e",
+  },
+  categoryChipText: {
+    fontSize: 12,
+    fontWeight: "500",
+    color: "#586069",
+  },
+  activeCategoryChipText: {
+    color: "#ffffff",
+    fontWeight: "600",
   },
   chip: {
     paddingHorizontal: 14,

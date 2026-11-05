@@ -2,6 +2,7 @@ import pytest
 import httpx
 from services.openfoodfacts import (
     lookup_barcode,
+    infer_category,
     OpenFoodFactsNotFoundError,
     OpenFoodFactsRateLimitError,
 )
@@ -23,6 +24,8 @@ def test_successful_lookup_parsing():
             "product_name": "Coop Mozzarella",
             "brands": "Coop",
             "image_front_url": "https://example.com/img.jpg",
+            "categories": "Mozzarella, Grated Mozzarella",
+            "categories_tags": ["en:dairies", "en:cheeses", "en:mozzarella"],
             "nutriments": {
                 "energy-kcal_100g": 298.0,
                 "proteins_100g": 21.0,
@@ -44,6 +47,7 @@ def test_successful_lookup_parsing():
     assert product.brand == "Coop"
     assert product.barcode == "7340191149779"
     assert product.image_url == "https://example.com/img.jpg"
+    assert product.detected_category == "cheese"
 
     facts = {f.metric: f for f in product.nutrients}
     assert facts["protein"].value == 21.0
@@ -98,3 +102,24 @@ def test_rate_limit_handling():
     with httpx.Client(transport=transport) as mock_client:
         with pytest.raises(OpenFoodFactsRateLimitError):
             lookup_barcode("12345678", client=mock_client)
+
+
+def test_infer_category_rules():
+    # Chicken / Poultry -> meat
+    assert infer_category(categories_tags=["en:meats-and-their-products", "en:chickens"]) == "meat"
+    # Mozzarella with dairy & cheese tags -> cheese (precedence over dairy)
+    assert infer_category(categories_tags=["en:dairies", "en:cheeses", "en:mozzarella"]) == "cheese"
+    # Milk -> dairy
+    assert infer_category(categories_tags=["en:dairies", "en:milks"]) == "dairy"
+    # Bread -> bakery
+    assert infer_category(categories_tags=["en:breads", "en:plant-based-foods"]) == "bakery"
+    # Chips -> snacks
+    assert infer_category(categories_tags=["en:snacks", "en:crisps"]) == "snacks"
+    # Juice -> drinks
+    assert infer_category(categories_tags=["en:beverages", "en:fruit-juices"]) == "drinks"
+
+    # Name-only inference (e.g. Finnish names)
+    assert infer_category(product_name="Kanan Fileesuikale 2.1%") == "meat"
+    assert infer_category(product_name="Oululainen Reissumies Ruisleipä") == "bakery"
+    assert infer_category(product_name="Valio Oltermanni Kermajuusto") == "cheese"
+    assert infer_category(product_name="Tuntematon Tuote 123") == "general"

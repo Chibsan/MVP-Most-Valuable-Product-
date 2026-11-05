@@ -16,6 +16,8 @@ services:
     image: mvp4u-backend:latest
     ports:
       - "8000:8000"
+    volumes:
+      - ./backend:/app
     depends_on:
       - db
     restart: on-failure

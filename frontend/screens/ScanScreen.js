@@ -14,10 +14,13 @@ import { Picker } from "@react-native-picker/picker";
 import { API_URL } from "../config";
 
 const CATEGORIES = [
+  { label: "✨ Auto-detect Category", value: "auto" },
+  { label: "Meat & Poultry", value: "meat" },
   { label: "Cheese", value: "cheese" },
   { label: "Dairy & Milk", value: "dairy" },
-  { label: "Meat & Plant-based", value: "meat" },
+  { label: "Bakery & Bread", value: "bakery" },
   { label: "Snacks & Treats", value: "snacks" },
+  { label: "Drinks & Beverages", value: "drinks" },
   { label: "General Grocery", value: "general" },
 ];
 
@@ -25,7 +28,7 @@ export default function ScanScreen({ navigation }) {
   const [hasPermission, setHasPermission] = useState(null);
   const [scanned, setScanned] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [category, setCategory] = useState("cheese");
+  const [category, setCategory] = useState("auto");
   const [scannedBarcode, setScannedBarcode] = useState(null);
   const [scannedProduct, setScannedProduct] = useState(null);
   const [errorMsg, setErrorMsg] = useState(null);
@@ -183,7 +186,7 @@ export default function ScanScreen({ navigation }) {
               <Text style={styles.productBrand}>Brand: {scannedProduct.brand}</Text>
             )}
             <Text style={styles.productCategory}>
-              Category: {scannedProduct.category.toUpperCase()}
+              Category: {scannedProduct.category.toUpperCase()} {category === "auto" ? "✨ (auto-detected)" : ""}
             </Text>
 
             {scannedProduct.nutrition_facts && scannedProduct.nutrition_facts.length > 0 ? (
