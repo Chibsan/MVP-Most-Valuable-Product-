@@ -1,8 +1,9 @@
+name: mvp4u
 version: '3.8'
 
 services:
   db:
-    image: postgres:15
+    image: docker.io/library/postgres:15
     environment:
       POSTGRES_USER: mvp4u_user
       POSTGRES_PASSWORD: mvp4u_password
@@ -12,6 +13,7 @@ services:
 
   backend:
     build: ./backend
+    image: mvp4u-backend:latest
     ports:
       - "8000:8000"
     depends_on:

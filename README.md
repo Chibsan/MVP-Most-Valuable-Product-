@@ -56,3 +56,4 @@ bun run start
 - **Linux**: Both `docker` and `podman` are supported. Podman runs daemonless and rootless out-of-the-box (`sudo pacman -S podman podman-compose` on Arch/CachyOS).
 - **macOS**: Compatible with Docker Desktop, Podman Desktop, or OrbStack.
 - **Windows**: Use Docker Desktop with the WSL 2 backend, or Podman via WSL 2. Ensure Windows Defender Firewall allows inbound traffic on port `8000` (FastAPI) and `8081` (Metro bundler) for physical device scanning.
+
