@@ -51,51 +51,56 @@ def infer_category(
     food_groups_tags: list[str] | tuple[str, ...] | None = None,
     categories_tags: list[str] | tuple[str, ...] | None = None,
     product_name: str | None = None,
+    name_variants: list[str | None] | tuple[str | None, ...] | None = None,
 ) -> str:
-    """Infer high-level category using Open Food Facts official PNNS / food groups taxonomy.
+    """Infer high-level category using Open Food Facts PNNS taxonomy, tags, and localized text.
 
-    Standardized taxonomies provided natively by Open Food Facts:
-    - pnns_groups_2: Specific food group (e.g., 'Cheese', 'Meat', 'Bread', 'Milk and yogurt')
-    - pnns_groups_1: Broad food group (e.g., 'Milk and dairy products', 'Fish Meat Eggs', 'Beverages')
-    - food_groups_tags: Machine-readable tags (e.g., 'en:cheese', 'en:meat', 'en:beverages')
+    Supports:
+    - Official PNNS groups and food_groups_tags
+    - Standard Open Food Facts taxonomy tags (including dried fruits, snacks, confectionery)
+    - Localized names (e.g. Finnish 'Kartanon Sipsit', Swedish, English) and brand identifiers
     """
     p2 = (pnns_groups_2 or "").lower()
     p1 = (pnns_groups_1 or "").lower()
-    fg_tags = set(food_groups_tags or [])
-    cat_tags = set(categories_tags or [])
-    all_tags = fg_tags | cat_tags
+    all_tags = set(food_groups_tags or []) | set(categories_tags or [])
 
-    # 1. Cheese (specific subset of dairy)
+    # Assemble searchable text from all name variants, primary name, and brand
+    names_to_check = [product_name]
+    if name_variants:
+        names_to_check.extend(name_variants)
+    text = " ".join(str(n).lower() for n in names_to_check if n)
+
+    # 1. Cheese (evaluated before dairy)
     if "cheese" in p2 or "en:cheese" in all_tags or "en:cheeses" in all_tags:
+        return "cheese"
+    if any(w in text for w in ("juusto", "cheese", "mozzarella", "cheddar", "gouda", "parmesan", "edam")):
         return "cheese"
 
     # 2. Meat, Poultry, Fish & Seafood
     if (
         any(k in p2 for k in ("meat", "poultry", "fish", "seafood"))
-        or "en:meat" in all_tags
-        or "en:meats" in all_tags
-        or "en:poultries" in all_tags
-        or "en:chickens" in all_tags
-        or "en:fishes" in all_tags
+        or any(t in all_tags for t in ("en:meat", "en:meats", "en:poultries", "en:chickens", "en:fishes", "en:seafood"))
     ):
+        return "meat"
+    if any(w in text for w in ("kana", "kanan", "broileri", "liha", "possu", "nauta", "kala", "lohi", "meat", "chicken", "beef", "pork", "filee", "kinkku", "makkara")):
         return "meat"
 
     # 3. Dairy & Milk
     if (
         any(k in p2 for k in ("milk", "yogurt", "dairy"))
-        or "en:milk-and-dairy-products" in all_tags
-        or "en:dairies" in all_tags
-        or "en:milks" in all_tags
+        or any(t in all_tags for t in ("en:milk-and-dairy-products", "en:dairies", "en:milks", "en:yogurts"))
     ):
+        return "dairy"
+    if any(w in text for w in ("maito", "jogurtti", "rahka", "piimä", "viili", "milk", "dairy", "skyr", "butter", "voi", "kerma")):
         return "dairy"
 
     # 4. Bakery & Bread
     if (
         any(k in p2 for k in ("bread", "pastr", "biscuit", "cake", "cereal"))
-        or "en:cereals-and-potatoes" in all_tags
-        or "en:breads" in all_tags
-        or "en:bakeries" in all_tags
+        or any(t in all_tags for t in ("en:cereals-and-potatoes", "en:breads", "en:bakeries", "en:pastries", "en:biscuits"))
     ):
+        return "bakery"
+    if any(w in text for w in ("leipä", "pulla", "kakku", "keksi", "bread", "pastry", "croissant", "sämpylä", "rieska", "flour", "jauho")):
         return "bakery"
 
     # 5. Beverages & Drinks
@@ -103,36 +108,66 @@ def infer_category(
         "beverage" in p1
         or "drink" in p1
         or "beverage" in p2
-        or "en:beverages" in all_tags
-        or "en:drinks" in all_tags
+        or any(t in all_tags for t in ("en:beverages", "en:drinks", "en:fruit-juices", "en:waters", "en:sodas"))
     ):
         return "drinks"
+    if any(w in text for w in ("mehu", "vesi", "limsa", "juice", "soda", "drink", "kahvi", "tee", "coffee", "tea", "olut", "beer")):
+        return "drinks"
 
-    # 6. Snacks & Sweets
+    # 6. Snacks & Sweets (chips, crisps, chocolates, sweets, dried fruits, nuts, snack bars)
     if (
         "snack" in p1
-        or any(k in p2 for k in ("sweet", "chocolate", "appetizer"))
-        or "en:sugary-snacks" in all_tags
-        or "en:salty-snacks" in all_tags
-        or "en:snacks" in all_tags
+        or any(k in p2 for k in ("sweet", "chocolate", "appetizer", "dried fruit", "nuts", "seeds"))
+        or any(
+            t in all_tags
+            for t in (
+                "en:sugary-snacks",
+                "en:salty-snacks",
+                "en:snacks",
+                "en:crisps",
+                "en:chips-and-fries",
+                "en:chocolates",
+                "en:candies",
+                "en:confectioneries",
+                "en:dried-fruits",
+                "en:nuts",
+                "en:popcorn",
+                "en:snack-bars",
+            )
+        )
     ):
         return "snacks"
-
-    # 7. Fallback for unclassified/custom products via name keywords
-    if product_name:
-        p_name = product_name.lower()
-        if any(w in p_name for w in ("juusto", "cheese", "mozzarella")):
-            return "cheese"
-        if any(w in p_name for w in ("kana", "liha", "possu", "nauta", "kala", "lohi", "meat", "chicken", "beef", "pork")):
-            return "meat"
-        if any(w in p_name for w in ("maito", "jogurtti", "rahka", "piimä", "milk", "dairy")):
-            return "dairy"
-        if any(w in p_name for w in ("leipä", "pulla", "kakku", "keksi", "bread", "pastry")):
-            return "bakery"
-        if any(w in p_name for w in ("mehu", "vesi", "limsa", "juice", "soda", "drink")):
-            return "drinks"
-        if any(w in p_name for w in ("sipsi", "suklaa", "karkki", "snack", "chips", "candy")):
-            return "snacks"
+    if any(
+        w in text
+        for w in (
+            "sipsi",
+            "sipsit",
+            "chips",
+            "crisps",
+            "taffel",
+            "estrella",
+            "lays",
+            "doritos",
+            "pringles",
+            "suklaa",
+            "karkki",
+            "makeinen",
+            "snack",
+            "candy",
+            "chocolate",
+            "chocolates",
+            "nuts",
+            "pähkinä",
+            "pähkinät",
+            "popcorn",
+            "patukka",
+            "lakritsi",
+            "salmiakki",
+            "kartanon",
+            "dried fruit",
+        )
+    ):
+        return "snacks"
 
     return "general"
 
@@ -196,7 +231,7 @@ def lookup_barcode(
 
     headers = {"User-Agent": user_agent}
     params = {
-        "fields": "code,product_name,product_name_en,brands,nutriments,image_front_url,quantity,categories,categories_tags,pnns_groups_1,pnns_groups_2,food_groups_tags"
+        "fields": "code,product_name,product_name_en,product_name_fi,product_name_sv,brands,nutriments,image_front_url,quantity,categories,categories_tags,pnns_groups_1,pnns_groups_2,food_groups_tags"
     }
 
     own_client = False
@@ -229,7 +264,12 @@ def lookup_barcode(
             )
 
         product_raw = data["product"]
-        name = product_raw.get("product_name") or product_raw.get("product_name_en")
+        name = (
+            product_raw.get("product_name")
+            or product_raw.get("product_name_fi")
+            or product_raw.get("product_name_en")
+            or product_raw.get("product_name_sv")
+        )
         brand = product_raw.get("brands")
         image_url = product_raw.get("image_front_url")
         nutriments = product_raw.get("nutriments") or {}
@@ -238,6 +278,14 @@ def lookup_barcode(
         food_groups_tags = tuple(product_raw.get("food_groups_tags") or [])
         categories_tags = tuple(product_raw.get("categories_tags") or [])
 
+        name_variants = [
+            product_raw.get("product_name"),
+            product_raw.get("product_name_fi"),
+            product_raw.get("product_name_en"),
+            product_raw.get("product_name_sv"),
+            brand,
+        ]
+
         nutrients = _extract_nutrients(nutriments)
         detected_category = infer_category(
             pnns_groups_1=pnns_groups_1,
@@ -245,6 +293,7 @@ def lookup_barcode(
             food_groups_tags=food_groups_tags,
             categories_tags=categories_tags,
             product_name=name,
+            name_variants=name_variants,
         )
 
         return OpenFoodFactsProduct(

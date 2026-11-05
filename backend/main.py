@@ -120,7 +120,19 @@ def add_product(payload: ProductCreate, db: Session = Depends(get_db)):
     if existing and existing.name and existing.nutrition_facts and not existing.name.startswith("Scanned Product"):
         # Auto-update category if existing product was saved with legacy/default category
         if requested_category == "auto":
-            inferred = openfoodfacts.infer_category(product_name=existing.name)
+            inferred = openfoodfacts.infer_category(
+                product_name=existing.name,
+                name_variants=[existing.name, existing.brand],
+            )
+            # If still general, check Open Food Facts for taxonomy tags/PNNS
+            if inferred == "general" and existing.category == "general":
+                try:
+                    off_prod = openfoodfacts.lookup_barcode(barcode)
+                    if off_prod.detected_category != "general":
+                        inferred = off_prod.detected_category
+                except Exception:
+                    pass
+
             if inferred != "general" and existing.category != inferred:
                 existing.category = inferred
                 db.commit()

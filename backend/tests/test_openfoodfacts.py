@@ -125,4 +125,20 @@ def test_infer_category_rules():
     assert infer_category(product_name="Kanan Fileesuikale 2.1%") == "meat"
     assert infer_category(product_name="Oululainen Reissumies Ruisleipä") == "bakery"
     assert infer_category(product_name="Valio Oltermanni Kermajuusto") == "cheese"
+    assert (
+        infer_category(
+            product_name="Kartanon original",
+            name_variants=["Kartanon Sipsit Original", "Taffel"],
+        )
+        == "snacks"
+    )
+    assert (
+        infer_category(
+            pnns_groups_1="Fruits and vegetables",
+            pnns_groups_2="Dried fruits",
+            categories_tags=["en:dried-fruits"],
+            product_name="Orange flavoured mango in dark chocolate",
+        )
+        == "snacks"
+    )
     assert infer_category(product_name="Tuntematon Tuote 123") == "general"
