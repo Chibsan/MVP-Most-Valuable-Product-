@@ -4,7 +4,11 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
+  TextInput,
   ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
 } from "react-native";
 import { CameraView, Camera } from "expo-camera";
 import { Picker } from "@react-native-picker/picker";
@@ -24,8 +28,11 @@ export default function ScanScreen({ navigation }) {
   const [scanned, setScanned] = useState(false);
   const [loading, setLoading] = useState(false);
   const [category, setCategory] = useState("cheese");
+  const [scannedBarcode, setScannedBarcode] = useState(null);
   const [scannedProduct, setScannedProduct] = useState(null);
   const [errorMsg, setErrorMsg] = useState(null);
+  const [manualBarcode, setManualBarcode] = useState("");
+  const [showManualInput, setShowManualInput] = useState(false);
 
   useEffect(() => {
     const getCameraPermissions = async () => {
@@ -35,18 +42,24 @@ export default function ScanScreen({ navigation }) {
     getCameraPermissions();
   }, []);
 
-  const handleBarCodeScanned = async ({ data }) => {
+  const processBarcode = async (barcodeToFetch) => {
+    const cleanBarcode = barcodeToFetch.trim();
+    if (!cleanBarcode) return;
+
     setScanned(true);
+    setScannedBarcode(cleanBarcode);
     setLoading(true);
     setErrorMsg(null);
     setScannedProduct(null);
+
+    console.log(`[ScanScreen] Contacting backend at ${API_URL}/products for barcode: ${cleanBarcode}`);
 
     try {
       const response = await fetch(`${API_URL}/products`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          barcode: data,
+          barcode: cleanBarcode,
           category: category,
         }),
       });
@@ -56,19 +69,36 @@ export default function ScanScreen({ navigation }) {
       }
 
       const product = await response.json();
+      console.log("[ScanScreen] Successfully saved and received product:", product);
       setScannedProduct(product);
     } catch (error) {
-      console.error("Error saving product:", error);
-      setErrorMsg("Failed to save product. Ensure backend is running and reachable.");
+      console.error("[ScanScreen] Error saving product:", error);
+      setErrorMsg(
+        `Failed to reach backend at ${API_URL}. Check if your backend container is running and on the same network.`
+      );
     } finally {
       setLoading(false);
     }
   };
 
+  const handleBarCodeScanned = ({ data, type }) => {
+    if (scanned || !data) return;
+    console.log(`[ScanScreen] Barcode detected by camera: ${data} (format: ${type})`);
+    processBarcode(data);
+  };
+
   const handleRescan = () => {
     setScanned(false);
+    setScannedBarcode(null);
     setScannedProduct(null);
     setErrorMsg(null);
+  };
+
+  const handleManualSubmit = () => {
+    if (manualBarcode.trim()) {
+      processBarcode(manualBarcode);
+      setManualBarcode("");
+    }
   };
 
   if (hasPermission === null) {
@@ -83,32 +113,55 @@ export default function ScanScreen({ navigation }) {
   if (hasPermission === false) {
     return (
       <View style={styles.centerContainer}>
-        <Text style={styles.errorText}>Camera access denied.</Text>
-        <Text style={styles.subtitle}>Please enable camera permissions in app settings.</Text>
+        <Text style={styles.errorText}>Camera permission was denied.</Text>
+        <Text style={styles.subtitle}>You can still enter barcodes manually below:</Text>
+        <TextInput
+          style={styles.manualInput}
+          placeholder="e.g. 7340191149779"
+          value={manualBarcode}
+          onChangeText={setManualBarcode}
+          keyboardType="numeric"
+        />
+        <TouchableOpacity style={styles.manualSubmitBtn} onPress={handleManualSubmit}>
+          <Text style={styles.buttonText}>Submit Barcode</Text>
+        </TouchableOpacity>
       </View>
     );
   }
 
   return (
-    <View style={styles.container}>
-      <CameraView
-        style={styles.camera}
-        onBarcodeScanned={scanned ? undefined : handleBarCodeScanned}
-        barcodeScannerSettings={{
-          barcodeTypes: ["qr", "ean13", "ean8", "upc_a", "upc_e"],
-        }}
-      >
-        <View style={styles.overlay}>
-          <View style={styles.scanTarget} />
-          <Text style={styles.hintText}>Point camera at barcode</Text>
-        </View>
-      </CameraView>
+    <KeyboardAvoidingView
+      style={styles.container}
+      behavior={Platform.OS === "ios" ? "padding" : undefined}
+    >
+      {/* Camera Viewport (CameraView is self-closing without children) */}
+      <View style={styles.cameraContainer}>
+        <CameraView
+          style={StyleSheet.absoluteFillObject}
+          facing="back"
+          barcodeScannerSettings={{
+            barcodeTypes: ["qr", "ean13", "ean8", "upc_a", "upc_e", "code128", "code39"],
+          }}
+          onBarcodeScanned={scanned ? undefined : handleBarCodeScanned}
+        />
 
-      <View style={styles.controls}>
+        {/* Sibling Overlay positioned on top of the camera */}
+        {!scanned && (
+          <View style={styles.overlay} pointerEvents="none">
+            <View style={styles.scanTarget} />
+            <Text style={styles.hintText}>Center barcode inside frame</Text>
+          </View>
+        )}
+      </View>
+
+      {/* Control Panel below the camera */}
+      <ScrollView style={styles.controls} contentContainerStyle={styles.controlsContent}>
         {loading && (
           <View style={styles.statusBox}>
             <ActivityIndicator size="small" color="#4A90E2" />
-            <Text style={styles.statusText}>Looking up product on Open Food Facts...</Text>
+            <Text style={styles.statusText}>
+              Scanned: {scannedBarcode} — Looking up on Open Food Facts...
+            </Text>
           </View>
         )}
 
@@ -132,7 +185,7 @@ export default function ScanScreen({ navigation }) {
 
             {scannedProduct.nutrition_facts && scannedProduct.nutrition_facts.length > 0 && (
               <View style={styles.nutrientRow}>
-                {scannedProduct.nutrition_facts.slice(0, 3).map((f) => (
+                {scannedProduct.nutrition_facts.slice(0, 4).map((f) => (
                   <View key={f.metric} style={styles.nutrientPill}>
                     <Text style={styles.pillLabel}>{f.metric}</Text>
                     <Text style={styles.pillValue}>
@@ -147,7 +200,7 @@ export default function ScanScreen({ navigation }) {
 
         {!scanned && (
           <>
-            <Text style={styles.label}>Select Category to Assign:</Text>
+            <Text style={styles.label}>Category to assign:</Text>
             <View style={styles.pickerContainer}>
               <Picker
                 selectedValue={category}
@@ -161,10 +214,34 @@ export default function ScanScreen({ navigation }) {
           </>
         )}
 
-        {scanned && (
+        {scanned ? (
           <TouchableOpacity style={styles.rescanButton} onPress={handleRescan}>
             <Text style={styles.buttonText}>Scan Another Barcode</Text>
           </TouchableOpacity>
+        ) : (
+          <TouchableOpacity
+            style={styles.toggleManualBtn}
+            onPress={() => setShowManualInput(!showManualInput)}
+          >
+            <Text style={styles.toggleManualText}>
+              {showManualInput ? "Hide Manual Input" : "Or Enter Barcode Manually"}
+            </Text>
+          </TouchableOpacity>
+        )}
+
+        {showManualInput && !scanned && (
+          <View style={styles.manualBox}>
+            <TextInput
+              style={styles.manualInput}
+              placeholder="e.g. 7340191149779"
+              value={manualBarcode}
+              onChangeText={setManualBarcode}
+              keyboardType="numeric"
+            />
+            <TouchableOpacity style={styles.manualSubmitBtn} onPress={handleManualSubmit}>
+              <Text style={styles.buttonText}>Look Up Barcode</Text>
+            </TouchableOpacity>
+          </View>
         )}
 
         <TouchableOpacity
@@ -173,8 +250,8 @@ export default function ScanScreen({ navigation }) {
         >
           <Text style={styles.buttonText}>View Category Rankings</Text>
         </TouchableOpacity>
-      </View>
-    </View>
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 
@@ -187,19 +264,23 @@ const styles = StyleSheet.create({
     padding: 20,
     backgroundColor: "#f5f5f5",
   },
-  camera: { flex: 1 },
-  overlay: {
+  cameraContainer: {
     flex: 1,
+    position: "relative",
+    overflow: "hidden",
+  },
+  overlay: {
+    ...StyleSheet.absoluteFillObject,
     justifyContent: "center",
     alignItems: "center",
   },
   scanTarget: {
-    width: 250,
-    height: 150,
+    width: 260,
+    height: 140,
     borderWidth: 2,
     borderColor: "#4A90E2",
     borderRadius: 12,
-    backgroundColor: "rgba(255,255,255,0.05)",
+    backgroundColor: "rgba(255,255,255,0.08)",
   },
   hintText: {
     color: "#fff",
@@ -207,21 +288,24 @@ const styles = StyleSheet.create({
     fontSize: 14,
     backgroundColor: "rgba(0,0,0,0.6)",
     paddingHorizontal: 12,
-    paddingVertical: 4,
+    paddingVertical: 5,
     borderRadius: 8,
   },
   controls: {
-    padding: 16,
+    maxHeight: 340,
     backgroundColor: "#ffffff",
     borderTopLeftRadius: 16,
     borderTopRightRadius: 16,
   },
-  label: { fontSize: 14, fontWeight: "600", color: "#333", marginBottom: 6 },
+  controlsContent: {
+    padding: 16,
+  },
+  label: { fontSize: 13, fontWeight: "600", color: "#444", marginBottom: 4 },
   pickerContainer: {
     borderWidth: 1,
     borderColor: "#ddd",
     borderRadius: 8,
-    marginBottom: 12,
+    marginBottom: 10,
     backgroundColor: "#fafafa",
   },
   statusBox: {
@@ -233,7 +317,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     marginBottom: 10,
   },
-  statusText: { marginLeft: 8, color: "#4A90E2", fontWeight: "600" },
+  statusText: { marginLeft: 8, color: "#4A90E2", fontWeight: "600", fontSize: 13 },
   errorBox: {
     padding: 10,
     backgroundColor: "#ffebee",
@@ -270,6 +354,37 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: 8,
   },
+  toggleManualBtn: {
+    alignItems: "center",
+    paddingVertical: 6,
+    marginBottom: 8,
+  },
+  toggleManualText: {
+    color: "#4A90E2",
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  manualBox: {
+    flexDirection: "row",
+    gap: 8,
+    marginBottom: 10,
+  },
+  manualInput: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: "#ccc",
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    fontSize: 14,
+    backgroundColor: "#fafafa",
+  },
+  manualSubmitBtn: {
+    backgroundColor: "#34A853",
+    paddingHorizontal: 16,
+    justifyContent: "center",
+    borderRadius: 8,
+  },
   rankingButton: {
     backgroundColor: "#4A90E2",
     padding: 14,
@@ -279,5 +394,5 @@ const styles = StyleSheet.create({
   buttonText: { color: "#fff", fontSize: 15, fontWeight: "bold" },
   loadingText: { marginTop: 10, color: "#666" },
   errorText: { fontSize: 18, fontWeight: "bold", color: "#d32f2f" },
-  subtitle: { fontSize: 14, color: "#666", marginTop: 6, textAlign: "center" },
+  subtitle: { fontSize: 14, color: "#666", marginTop: 6, textAlign: "center", marginBottom: 12 },
 });
