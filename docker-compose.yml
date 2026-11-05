@@ -18,5 +18,6 @@ services:
       - "8000:8000"
     depends_on:
       - db
+    restart: on-failure
     environment:
       - DATABASE_URL=postgresql://mvp4u_user:mvp4u_password@db:5432/mvp4u_db

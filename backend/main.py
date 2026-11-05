@@ -1,6 +1,9 @@
+import time
+import logging
 from fastapi import FastAPI, Depends, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import OperationalError
 from pydantic import BaseModel
 from typing import Any
 
@@ -8,8 +11,30 @@ import models
 from database import engine, SessionLocal
 from services import openfoodfacts, ranking
 
-# Ensure tables exist
-models.Base.metadata.create_all(bind=engine)
+logger = logging.getLogger("uvicorn")
+
+
+def init_database(max_retries: int = 15, delay: float = 1.5):
+    """Wait for database to finish starting up and initialize schema."""
+    for attempt in range(1, max_retries + 1):
+        try:
+            models.Base.metadata.create_all(bind=engine)
+            logger.info("Database connection and tables initialized successfully.")
+            return
+        except OperationalError:
+            if attempt == max_retries:
+                logger.error("Failed to connect to database after %d attempts.", max_retries)
+                raise
+            logger.warning(
+                "Database not ready yet (attempt %d/%d). Retrying in %.1fs...",
+                attempt,
+                max_retries,
+                delay,
+            )
+            time.sleep(delay)
+
+
+init_database()
 
 app = FastAPI(
     title="MVP4U Backend",
