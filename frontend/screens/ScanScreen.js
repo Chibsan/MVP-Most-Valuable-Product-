@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity } from "react-native";
 import { CameraView, Camera } from "expo-camera";
 import { Picker } from "@react-native-picker/picker";
 
-const API_URL = "http://192.168.0.139:8000"; // 10.0.2.2 resolves to localhost in Android Emulator
+import { API_URL } from "../config";
 
 export default function ScanScreen({ navigation }) {
   const [hasPermission, setHasPermission] = useState(null);

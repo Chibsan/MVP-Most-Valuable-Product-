@@ -9,7 +9,7 @@ import {
 } from "react-native";
 import { useIsFocused } from "@react-navigation/native";
 
-const API_URL = "http://192.168.0.139:8000";
+import { API_URL } from "../config";
 
 export default function RankingScreen({ navigation }) {
   const [products, setProducts] = useState([]);
