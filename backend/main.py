@@ -92,12 +92,12 @@ def add_product(payload: ProductCreate, db: Session = Depends(get_db)):
     barcode = payload.barcode.strip()
     category = payload.category.strip().lower() if payload.category else "general"
 
-    # 1. Return existing product if already scanned and cached in DB
+    # Return existing product only if it already has rich nutrition facts
     existing = db.query(models.Product).filter(models.Product.barcode == barcode).first()
-    if existing:
+    if existing and existing.name and existing.nutrition_facts and not existing.name.startswith("Scanned Product"):
         return existing
 
-    # 2. Query Open Food Facts for real product identity and nutrients
+    # Query Open Food Facts for real product identity and nutrients
     name = None
     brand = None
     image_url = None
@@ -105,38 +105,37 @@ def add_product(payload: ProductCreate, db: Session = Depends(get_db)):
 
     try:
         off_product = openfoodfacts.lookup_barcode(barcode)
-        name = off_product.name
+        name = off_product.name or f"Product {barcode}"
         brand = off_product.brand
         image_url = off_product.image_url
         nutrient_facts = off_product.nutrients
     except (openfoodfacts.OpenFoodFactsNotFoundError, ValueError):
-        # Fallback when product is not in Open Food Facts catalog
-        name = f"Scanned Product ({barcode})"
+        name = f"Product {barcode}"
     except openfoodfacts.OpenFoodFactsRateLimitError:
         raise HTTPException(
             status_code=429,
             detail="Open Food Facts rate limit reached. Please try again shortly.",
         )
     except Exception as exc:
-        name = f"Scanned Product ({barcode})"
+        name = f"Product {barcode}"
 
-    # 3. Create and persist product
-    new_product = models.Product(
-        barcode=barcode,
-        name=name,
-        brand=brand,
-        category=category,
-        image_url=image_url,
-        score=0.0,
-    )
-    db.add(new_product)
-    db.flush()
+    product = existing or models.Product(barcode=barcode, score=0.0)
+    product.name = name
+    product.brand = brand
+    product.category = category
+    product.image_url = image_url
 
-    # 4. Persist parsed nutrition facts
+    if not existing:
+        db.add(product)
+        db.flush()
+    else:
+        # Clear any stale facts before populating enriched facts
+        db.query(models.NutritionFact).filter(models.NutritionFact.product_id == product.id).delete()
+
     for fact in nutrient_facts:
         db.add(
             models.NutritionFact(
-                product_id=new_product.id,
+                product_id=product.id,
                 metric=fact.metric,
                 value=fact.value,
                 unit=fact.unit,
@@ -146,8 +145,8 @@ def add_product(payload: ProductCreate, db: Session = Depends(get_db)):
         )
 
     db.commit()
-    db.refresh(new_product)
-    return new_product
+    db.refresh(product)
+    return product
 
 
 @app.get("/products/ranking", response_model=list[RankedItemOut])

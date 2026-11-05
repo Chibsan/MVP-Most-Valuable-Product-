@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   View,
   Text,
@@ -6,8 +6,6 @@ import {
   TouchableOpacity,
   TextInput,
   ActivityIndicator,
-  KeyboardAvoidingView,
-  Platform,
   ScrollView,
 } from "react-native";
 import { CameraView, Camera } from "expo-camera";
@@ -34,6 +32,8 @@ export default function ScanScreen({ navigation }) {
   const [manualBarcode, setManualBarcode] = useState("");
   const [showManualInput, setShowManualInput] = useState(false);
 
+  const isScanningRef = useRef(false);
+
   useEffect(() => {
     const getCameraPermissions = async () => {
       const { status } = await Camera.requestCameraPermissionsAsync();
@@ -46,6 +46,7 @@ export default function ScanScreen({ navigation }) {
     const cleanBarcode = barcodeToFetch.trim();
     if (!cleanBarcode) return;
 
+    isScanningRef.current = true;
     setScanned(true);
     setScannedBarcode(cleanBarcode);
     setLoading(true);
@@ -82,12 +83,14 @@ export default function ScanScreen({ navigation }) {
   };
 
   const handleBarCodeScanned = ({ data, type }) => {
-    if (scanned || !data) return;
+    if (isScanningRef.current || scanned || !data) return;
+    isScanningRef.current = true;
     console.log(`[ScanScreen] Barcode detected by camera: ${data} (format: ${type})`);
     processBarcode(data);
   };
 
   const handleRescan = () => {
+    isScanningRef.current = false;
     setScanned(false);
     setScannedBarcode(null);
     setScannedProduct(null);
@@ -130,14 +133,11 @@ export default function ScanScreen({ navigation }) {
   }
 
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
-    >
-      {/* Camera Viewport (CameraView is self-closing without children) */}
-      <View style={styles.cameraContainer}>
+    <View style={styles.container}>
+      {/* Camera Viewport with sibling overlay */}
+      <View style={styles.cameraWrapper}>
         <CameraView
-          style={StyleSheet.absoluteFillObject}
+          style={styles.camera}
           facing="back"
           barcodeScannerSettings={{
             barcodeTypes: ["qr", "ean13", "ean8", "upc_a", "upc_e", "code128", "code39"],
@@ -145,7 +145,6 @@ export default function ScanScreen({ navigation }) {
           onBarcodeScanned={scanned ? undefined : handleBarCodeScanned}
         />
 
-        {/* Sibling Overlay positioned on top of the camera */}
         {!scanned && (
           <View style={styles.overlay} pointerEvents="none">
             <View style={styles.scanTarget} />
@@ -155,7 +154,11 @@ export default function ScanScreen({ navigation }) {
       </View>
 
       {/* Control Panel below the camera */}
-      <ScrollView style={styles.controls} contentContainerStyle={styles.controlsContent}>
+      <ScrollView
+        style={styles.controls}
+        contentContainerStyle={styles.controlsContent}
+        keyboardShouldPersistTaps="handled"
+      >
         {loading && (
           <View style={styles.statusBox}>
             <ActivityIndicator size="small" color="#4A90E2" />
@@ -183,7 +186,7 @@ export default function ScanScreen({ navigation }) {
               Category: {scannedProduct.category.toUpperCase()}
             </Text>
 
-            {scannedProduct.nutrition_facts && scannedProduct.nutrition_facts.length > 0 && (
+            {scannedProduct.nutrition_facts && scannedProduct.nutrition_facts.length > 0 ? (
               <View style={styles.nutrientRow}>
                 {scannedProduct.nutrition_facts.slice(0, 4).map((f) => (
                   <View key={f.metric} style={styles.nutrientPill}>
@@ -194,6 +197,8 @@ export default function ScanScreen({ navigation }) {
                   </View>
                 ))}
               </View>
+            ) : (
+              <Text style={styles.noFactsText}>No nutrition facts recorded yet</Text>
             )}
           </View>
         )}
@@ -239,7 +244,7 @@ export default function ScanScreen({ navigation }) {
               keyboardType="numeric"
             />
             <TouchableOpacity style={styles.manualSubmitBtn} onPress={handleManualSubmit}>
-              <Text style={styles.buttonText}>Look Up Barcode</Text>
+              <Text style={styles.buttonText}>Look Up</Text>
             </TouchableOpacity>
           </View>
         )}
@@ -251,7 +256,7 @@ export default function ScanScreen({ navigation }) {
           <Text style={styles.buttonText}>View Category Rankings</Text>
         </TouchableOpacity>
       </ScrollView>
-    </KeyboardAvoidingView>
+    </View>
   );
 }
 
@@ -264,13 +269,21 @@ const styles = StyleSheet.create({
     padding: 20,
     backgroundColor: "#f5f5f5",
   },
-  cameraContainer: {
+  cameraWrapper: {
     flex: 1,
     position: "relative",
-    overflow: "hidden",
+    backgroundColor: "#000",
+  },
+  camera: {
+    flex: 1,
+    width: "100%",
   },
   overlay: {
-    ...StyleSheet.absoluteFillObject,
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
     justifyContent: "center",
     alignItems: "center",
   },
@@ -292,7 +305,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   controls: {
-    maxHeight: 340,
+    maxHeight: 330,
     backgroundColor: "#ffffff",
     borderTopLeftRadius: 16,
     borderTopRightRadius: 16,
@@ -347,6 +360,7 @@ const styles = StyleSheet.create({
   },
   pillLabel: { fontSize: 10, color: "#666", textTransform: "capitalize" },
   pillValue: { fontSize: 12, fontWeight: "bold", color: "#4A90E2" },
+  noFactsText: { fontSize: 12, color: "#999", marginTop: 6, fontStyle: "italic" },
   rescanButton: {
     backgroundColor: "#FF9500",
     padding: 14,
