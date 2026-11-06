@@ -7,6 +7,7 @@ import {
   TextInput,
   ActivityIndicator,
   ScrollView,
+  Platform,
 } from "react-native";
 import { CameraView, Camera } from "expo-camera";
 import { Picker } from "@react-native-picker/picker";
@@ -33,7 +34,7 @@ export default function ScanScreen({ navigation }) {
   const [scannedProduct, setScannedProduct] = useState(null);
   const [errorMsg, setErrorMsg] = useState(null);
   const [manualBarcode, setManualBarcode] = useState("");
-  const [showManualInput, setShowManualInput] = useState(false);
+  const [showManualInput, setShowManualInput] = useState(Platform.OS === "web");
 
   const isScanningRef = useRef(false);
 
@@ -151,7 +152,11 @@ export default function ScanScreen({ navigation }) {
         {!scanned && (
           <View style={styles.overlay} pointerEvents="none">
             <View style={styles.scanTarget} />
-            <Text style={styles.hintText}>Center barcode inside frame</Text>
+            <Text style={styles.hintText}>
+              {Platform.OS === "web"
+                ? "Desktop webcam active • Enter barcode below"
+                : "Center barcode inside frame"}
+            </Text>
           </View>
         )}
       </View>
@@ -241,9 +246,11 @@ export default function ScanScreen({ navigation }) {
           <View style={styles.manualBox}>
             <TextInput
               style={styles.manualInput}
-              placeholder="e.g. 7340191149779"
+              placeholder="e.g. 6414891801020"
               value={manualBarcode}
               onChangeText={setManualBarcode}
+              onSubmitEditing={handleManualSubmit}
+              returnKeyType="search"
               keyboardType="numeric"
             />
             <TouchableOpacity style={styles.manualSubmitBtn} onPress={handleManualSubmit}>

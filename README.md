@@ -1,6 +1,6 @@
 # MVP4U - Most Valuable Product
 
-Cross-platform grocery comparison and barcode scanning application with a FastAPI backend, PostgreSQL database, and React Native (Expo) mobile frontend.
+Cross-platform grocery comparison and barcode scanning application with a FastAPI backend, PostgreSQL database, and React Native (Expo) frontend supporting **Mobile** and **Web**.
 
 ---
 
@@ -8,15 +8,11 @@ Cross-platform grocery comparison and barcode scanning application with a FastAP
 
 - **Container Engine**: [Docker](https://docs.docker.com/get-docker/) or [Podman](https://podman.io/) (with compose plugin)
 - **Frontend Runtime**: [Bun](https://bun.sh/) (recommended) or [Node.js](https://nodejs.org/) (v18+)
-- **Mobile Testing**: [Expo Go](https://expo.dev/go) app on your physical smartphone (iOS / Android) or an Android/iOS emulator.
+- **Mobile Testing**: [Expo Go](https://expo.dev/go) app (iOS / Android) or an emulator
 
 ---
 
-## Getting Started
-
-### 1. Run the Backend & Database
-
-The backend and PostgreSQL database run containerized:
+## 1. Start Backend & Database
 
 ```bash
 # Using Docker
@@ -26,34 +22,49 @@ docker compose up --build
 podman compose up --build
 ```
 
-- **API Base**: `http://localhost:8000`
-- **Interactive Swagger Docs**: `http://localhost:8000/docs`
+- **API**: `http://localhost:8000`
+- **Swagger Docs**: `http://localhost:8000/docs`
 
 ---
 
-### 2. Run the Mobile Frontend
+## 2. Start Frontend
 
-Open a new terminal window:
+Navigate to `frontend/` and install dependencies:
 
 ```bash
 cd frontend
-
-# Install dependencies
 bun install
-
-# Start the Expo development server
-bun run start
 ```
 
-- Open the **Expo Go** app on your phone and scan the displayed QR code.
-- Ensure your phone and development machine are connected to the same local Wi-Fi network.
-- To run on an emulator, press `a` (Android) or `i` (iOS).
+### Option A: Web (Browser)
+
+```bash
+bun run web
+```
+Opens in your browser at `http://localhost:8081`.
+- **Rankings**: Full interactive rankings and category filters.
+- **Scanning**: On desktop web browsers, use the manual barcode input (webcams lack native hardware autofocus for 1D barcodes).
+
+### Option B: Mobile (Expo Go)
+
+```bash
+bun run start
+```
+Scan the QR code in **Expo Go** on your phone (or press `a` for Android emulator / `i` for iOS simulator). Uses your phone's rear autofocus camera for live scanning.
+
+---
+
+## 3. Run Backend Tests
+
+```bash
+podman exec mvp4u_backend_1 pytest tests
+# Or: docker compose exec backend pytest tests
+```
 
 ---
 
 ## Platform Notes
 
-- **Linux**: Both `docker` and `podman` are supported. Podman runs daemonless and rootless out-of-the-box (`sudo pacman -S podman podman-compose` on Arch/CachyOS).
-- **macOS**: Compatible with Docker Desktop, Podman Desktop, or OrbStack.
-- **Windows**: Use Docker Desktop with the WSL 2 backend, or Podman via WSL 2. Ensure Windows Defender Firewall allows inbound traffic on port `8000` (FastAPI) and `8081` (Metro bundler) for physical device scanning.
+- **Linux**: Both `docker` and `podman` are supported. If using `ufw`, allow inbound ports `8000` (FastAPI) and `8081` (Metro bundler) for mobile device connections.
+- **macOS / Windows**: Compatible with Docker Desktop or Podman. Ensure local firewall allows inbound traffic on ports `8000` and `8081` for physical device testing.
 
