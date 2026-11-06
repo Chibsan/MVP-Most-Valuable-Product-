@@ -67,4 +67,5 @@ podman exec mvp4u_backend_1 pytest tests
 
 - **Linux**: Both `docker` and `podman` are supported. If using `ufw`, allow inbound ports `8000` (FastAPI) and `8081` (Metro bundler) for mobile device connections.
 - **macOS / Windows**: Compatible with Docker Desktop or Podman. Ensure local firewall allows inbound traffic on ports `8000` and `8081` for physical device testing.
+- **GitHub Codespaces**: In the **Ports** tab, right-click Port `8000` -> **Port Visibility** -> set to **Public** so the browser frontend can reach the backend.
 
