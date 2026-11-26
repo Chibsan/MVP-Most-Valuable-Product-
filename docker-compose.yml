@@ -1,0 +1,26 @@
+name: mvp4u
+version: '3.8'
+
+services:
+  db:
+    image: docker.io/library/postgres:15
+    environment:
+      POSTGRES_USER: mvp4u_user
+      POSTGRES_PASSWORD: mvp4u_password
+      POSTGRES_DB: mvp4u_db
+    ports:
+      - "5432:5432"
+
+  backend:
+    build: ./backend
+    image: mvp4u-backend:latest
+    command: ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend:/app
+    depends_on:
+      - db
+    restart: on-failure
+    environment:
+      - DATABASE_URL=postgresql://mvp4u_user:mvp4u_password@db:5432/mvp4u_db
